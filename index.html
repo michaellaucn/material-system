@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>亚帮公司 · 物料流转管理系统</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js">
+    </script>
+    <style>
+        :root {
+            --primary: #4F6EF7;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --bg: #F0F2F7;
+            --card: #FFFFFF;
+            --text: #1F2937;
+            --text2: #6B7280;
+            --border: #E5E7EB;
+            --shadow: 0 2px 12px rgba(0,0,0,0.06);
+            --radius: 14px;
+            --radius-sm: 10px;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .top-nav {
+            position: sticky; top: 0; z-index: 100; background: #fff;
+            border-bottom: 1px solid var(--border); padding: 0 14px; height: 50px;
+            display: flex; align-items: center; justify-content: space-between;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        }
+        .top-nav .logo { font-size: 15px; font-weight: 700; color: var(--primary); white-space: nowrap; }
+        .tab-nav {
+            position: sticky; top: 50px; z-index: 99; background: #fff;
+            border-bottom: 1px solid var(--border); display: flex; overflow-x: auto;
+            scrollbar-width: none; gap: 0; padding: 0 6px;
+        }
+        .tab-nav::-webkit-scrollbar { display: none; }
+        .tab-nav .tab-btn {
+            flex-shrink: 0; padding: 10px 13px; border: none; background: transparent;
+            font-size: 12px; font-weight: 500; color: var(--text2); cursor: pointer;
+            border-bottom: 3px solid transparent; white-space: nowrap; transition: 0.2s;
+        }
+        .tab-nav .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+        .main-content { max-width: 960px; margin: 0 auto; padding: 14px; padding-bottom: 50px; }
+        .page { display: none; animation: fadeIn 0.2s; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+        .card {
+            background: var(--card); border-radius: var(--radius); padding: 18px;
+            margin-bottom: 14px; box-shadow: var(--shadow); border: 1px solid var(--border);
+        }
+        .card h2 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+        .card h3 { font-size: 14px; font-weight: 600; margin: 10px 0 6px; color: #374151; }
+        .card .subtitle { font-size: 11px; color: var(--text2); margin-bottom: 10px; }
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr));
+            gap: 8px; margin-bottom: 14px;
+        }
+        .stat-card {
+            background: #fff; border-radius: var(--radius-sm); padding: 14px; text-align: center;
+            box-shadow: var(--shadow); border: 1px solid var(--border);
+        }
+        .stat-card .stat-value { font-size: 22px; font-weight: 700; color: var(--primary); }
+        .stat-card .stat-label { font-size: 10px; color: var(--text2); margin-top: 2px; }
+        .stat-card.warn .stat-value { color: var(--warning); }
+        .stat-card.danger .stat-value { color: var(--danger); }
+        .form-group { margin-bottom: 10px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%; padding: 9px 12px; border: 2px solid var(--border);
+            border-radius: 8px; font-size: 13px; background: #FAFBFC; transition: 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none; border-color: var(--primary); background: #fff;
+            box-shadow: 0 0 0 3px rgba(79,110,247,0.07);
+        }
+        .form-row { display: flex; gap: 8px; flex-wrap: wrap; }
+        .form-row .form-group { flex: 1; min-width: 100px; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 5px; padding: 9px 16px;
+            border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: 0.2s; white-space: nowrap; font-family: inherit; min-height: 38px;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-warning { background: var(--warning); color: #fff; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .btn-outline { background: #fff; color: var(--primary); border: 2px solid var(--primary); }
+        .btn-sm { padding: 5px 10px; font-size: 11px; min-height: 30px; border-radius: 6px; }
+        .btn-block { width: 100%; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .table-wrap {
+            overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 6px 0;
+            border-radius: 8px; border: 1px solid var(--border);
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 500px; }
+        table th { background: #F9FAFB; padding: 8px; text-align: left; font-weight: 600; border-bottom: 2px solid #E5E7EB; font-size:10px; }
+        table td { padding: 7px 8px; border-bottom: 1px solid #F3F4F6; }
+        .tag { display: inline-block; padding: 3px 7px; border-radius: 10px; font-size: 9px; font-weight: 600; }
+        .tag-green { background: #ECFDF5; color: #059669; }
+        .tag-yellow { background: #FFFBEB; color: #B45309; }
+        .tag-blue { background: #EEF1FF; color: #4F6EF7; }
+        .tag-red { background: #FEF2F2; color: #DC2626; }
+        .empty-state { text-align: center; padding: 28px 14px; color: var(--text2); font-size:13px; }
+        .toast {
+            position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 9999;
+            background: #1F2937; color: #fff; padding: 9px 18px; border-radius: 20px;
+            font-size: 12px; animation: toastIn 0.3s ease, toastOut 0.3s ease 2s forwards;
+        }
+        @keyframes toastIn { from{opacity:0;transform:translateX(-50%) translateY(-8px);} to{opacity:1;transform:translateX(-50%) translateY(0);} }
+        @keyframes toastOut { from{opacity:1;} to{opacity:0;} }
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+            z-index: 200; justify-content: center; align-items: center; padding: 14px;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: #fff; border-radius: var(--radius); padding: 20px; width: 100%;
+            max-width: 460px; max-height: 85vh; overflow-y: auto;
+        }
+        .storage-warning {
+            background: #FEF3C7; color: #92400E; text-align: center; padding: 6px;
+            font-size: 11px; display: none;
+        }
+        @media (max-width: 640px) {
+            .top-nav { height: 44px; padding: 0 8px; }
+            .top-nav .logo { font-size:13px; }
+            .tab-nav { top:44px; }
+            .tab-nav .tab-btn { padding:8px 9px; font-size:10px; }
+            .main-content { padding: 8px; padding-bottom:40px; }
+            .card { padding:12px; }
+            .stats-grid { grid-template-columns: repeat(2,1fr); gap:5px; }
+            .stat-card { padding:10px 6px; }
+            .stat-card .stat-value { font-size:18px; }
+            .form-row { flex-direction: column; gap:0; }
+        }
+    </style>
+</head>
+<body>
+    <div id="toastContainer"></div>
+    <div class="storage-warning" id="storageWarning">⚠️ 浏览器存储不可用，数据仅暂存内存（刷新后丢失）</div>
+
+    <!-- 登录页面 -->
+    <div id="loginPage" style="display:block;">
+        <div style="max-width:400px;margin:40px auto;padding:14px;">
+            <div class="card" style="text-align:center;">
+                <div style="font-size:48px;">📦</div>
+                <h1>物料流转管理系统</h1>
+                <p style="color:#6B7280;font-size:12px;">亚帮公司 & 玻璃垫厂</p>
+                <div id="loginForm">
+                    <div class="form-group"><label>用户名</label><input type="text" id="loginUsername" placeholder="请输入用户名"></div>
+                    <div class="form-group"><label>密码</label><input type="password" id="loginPassword" placeholder="请输入密码"></div>
+                    <button class="btn btn-primary btn-block" onclick="doLogin()">🔐 登录</button>
+                    <p style="margin-top:10px;font-size:11px;">还没有账号？<a href="javascript:showRegister()" style="color:#4F6EF7;">立即注册</a></p>
+                    <p style="font-size:10px;color:#9CA3AF;">演示账号：yabang / 123456 或 factory / 123456</p>
+                </div>
+                <div id="registerForm" style="display:none;">
+                    <div class="form-group"><label>用户名</label><input type="text" id="regUsername"></div>
+                    <div class="form-group"><label>密码</label><input type="password" id="regPassword"></div>
+                    <div class="form-group"><label>确认密码</label><input type="password" id="regPassword2"></div>
+                    <div class="form-group"><label>所属公司</label><select id="regRole"><option value="yabang">亚帮公司</option><option value="factory">玻璃垫厂</option></select></div>
+                    <div class="form-group"><label>显示名称</label><input type="text" id="regDisplayName"></div>
+                    <button class="btn btn-success btn-block" onclick="doRegister()">✅ 注册</button>
+                    <p style="margin-top:10px;font-size:11px;">已有账号？<a href="javascript:showLogin()" style="color:#4F6EF7;">返回登录</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div id="mainApp" style="display:none;">
+        <div class="top-nav">
+            <div class="logo">📦 <span id="headerTitle">物料流转管理</span></div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span id="headerUser">👤 --</span>
+                <span style="font-weight:600;color:var(--primary);" id="headerRole">--</span>
+                <button class="btn-sm" style="background:#FEF2F2;color:#DC2626;border:none;" onclick="doLogout()">退出</button>
+            </div>
+        </div>
+        <div class="tab-nav" id="tabNav"></div>
+        <div class="main-content" id="mainContent"></div>
+    </div>
+
+    <!-- 确认收货模态框 -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal">
+            <h3 id="confirmModalTitle">确认操作</h3>
+            <p id="confirmModalMsg" style="font-size:12px;"></p>
+            <div class="form-group"><label>确认人</label><input type="text" id="confirmOperator"></div>
+            <div style="display:flex; gap:6px; justify-content:flex-end; margin-top:14px;">
+                <button class="btn btn-outline btn-sm" onclick="closeModal()">取消</button>
+                <button class="btn btn-primary btn-sm" id="confirmModalBtn">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function() {
+            // ==================== 存储容错 ====================
+            let memoryDB = null;
+            let storageAvailable = true;
+            const STORAGE_KEY = 'mfs_data_v2';
+
+            function testStorage() {
+                try { const k = '__test'; localStorage.setItem(k, '1'); localStorage.removeItem(k); return true; } catch (e) { return false; }
+            }
+            if (!testStorage()) {
+                storageAvailable = false;
+                document.getElementById('storageWarning').style.display = 'block';
+            }
+
+            function getDB() {
+                if (!storageAvailable) return memoryDB;
+                try {
+                    const raw = localStorage.getItem(STORAGE_KEY);
+                    return raw ? JSON.parse(raw) : null;
+                } catch (e) {
+                    storageAvailable = false;
+                    document.getElementById('storageWarning').style.display = 'block';
+                    return memoryDB;
+                }
+            }
+            function saveDB(db) {
+                memoryDB = db;
+                if (!storageAvailable) { document.getElementById('storageWarning').style.display = 'block'; return; }
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); } catch (e) {
+                    storageAvailable = false;
+                    document.getElementById('storageWarning').style.display = 'block';
+                }
+            }
+
+            // ==================== 数据初始化 ====================
+            function initDB() {
+                let db = getDB();
+                if (!db) {
+                    db = {
+                        systemConfig: { companyName: '亚帮公司', factoryName: '玻璃垫厂' },
+                        warehouses: [
+                            { id: 'wh_company', name: '亚帮公司仓库', type: 'company' },
+                            { id: 'wh_factory', name: '玻璃垫厂仓库', type: 'factory' }
+                        ],
+                        materials: [
+                            { id: 'mat_1', name: '袖套', sku: 'XT-001', unit: '个' },
+                            { id: 'mat_2', name: '底胶', sku: 'DJ-001', unit: 'kg' },
+                            { id: 'mat_3', name: '防滑垫', sku: 'FH-001', unit: '片' },
+                            { id: 'mat_4', name: '包装盒', sku: 'BZ-001', unit: '个' }
+                        ],
+                        products: [
+                            { id: 'prod_1', name: '玻璃鼠标垫-标准款', sku: 'GMP-001', unit: '个' },
+                            { id: 'prod_2', name: '玻璃鼠标垫-加大款', sku: 'GMP-002', unit: '个' }
+                        ],
+                        boms: [
+                            { id:'bom_1', productId:'prod_1', materialId:'mat_1', quantity:1, productName:'玻璃鼠标垫-标准款', materialName:'袖套' },
+                            { id:'bom_2', productId:'prod_1', materialId:'mat_2', quantity:0.5, productName:'玻璃鼠标垫-标准款', materialName:'底胶' },
+                            { id:'bom_3', productId:'prod_1', materialId:'mat_3', quantity:1, productName:'玻璃鼠标垫-标准款', materialName:'防滑垫' },
+                            { id:'bom_4', productId:'prod_1', materialId:'mat_4', quantity:1, productName:'玻璃鼠标垫-标准款', materialName:'包装盒' },
+                            { id:'bom_5', productId:'prod_2', materialId:'mat_1', quantity:1, productName:'玻璃鼠标垫-加大款', materialName:'袖套' },
+                            { id:'bom_6', productId:'prod_2', materialId:'mat_2', quantity:0.8, productName:'玻璃鼠标垫-加大款', materialName:'底胶' },
+                            { id:'bom_7', productId:'prod_2', materialId:'mat_3', quantity:1.5, productName:'玻璃鼠标垫-加大款', materialName:'防滑垫' },
+                            { id:'bom_8', productId:'prod_2', materialId:'mat_4', quantity:1, productName:'玻璃鼠标垫-加大款', materialName:'包装盒' }
+                        ],
+                        orders: [],
+                        materialRecords: [],
+                        productRecords: [],
+                        users: [
+                            { id:'user_1', username:'yabang', password:'123456', role:'yabang', displayName:'亚帮-张经理', createdAt:new Date().toISOString() },
+                            { id:'user_2', username:'factory', password:'123456', role:'factory', displayName:'玻璃垫厂-李主管', createdAt:new Date().toISOString() }
+                        ],
+                        idCounter: 400
+                    };
+                    const n = new Date();
+                    db.materialRecords.push({ id:'mr_1', recordType:'purchase_inbound', materialId:'mat_1', materialName:'袖套', quantity:500, toWarehouseId:'wh_company', operatorName:'张经理', operatorCompany:'yabang', status:'confirmed', note:'采购入库', createdAt:new Date(n-86400000*5).toISOString() });
+                    db.materialRecords.push({ id:'mr_2', recordType:'purchase_inbound', materialId:'mat_2', materialName:'底胶', quantity:300, toWarehouseId:'wh_company', operatorName:'张经理', operatorCompany:'yabang', status:'confirmed', note:'采购入库', createdAt:new Date(n-86400000*4).toISOString() });
+                    db.materialRecords.push({ id:'mr_3', recordType:'purchase_inbound', materialId:'mat_3', materialName:'防滑垫', quantity:600, toWarehouseId:'wh_company', operatorName:'张经理', operatorCompany:'yabang', status:'confirmed', note:'采购入库', createdAt:new Date(n-86400000*4).toISOString() });
+                    db.materialRecords.push({ id:'mr_4', recordType:'purchase_inbound', materialId:'mat_4', materialName:'包装盒', quantity:800, toWarehouseId:'wh_company', operatorName:'张经理', operatorCompany:'yabang', status:'confirmed', note:'采购入库', createdAt:new Date(n-86400000*3).toISOString() });
+                    db.productRecords.push({ id:'pr_1', recordType:'production_inbound', productId:'prod_1', productName:'玻璃鼠标垫-标准款', quantity:400, toWarehouseId:'wh_factory', operatorName:'李主管', operatorCompany:'factory', status:'confirmed', note:'生产完成', createdAt:new Date(n-86400000*2).toISOString() });
+                    saveDB(db);
+                }
+                syncWarehouseNames(db);
+                return db;
+            }
+            function syncWarehouseNames(db) {
+                const cw = db.warehouses.find(w=>w.type==='company');
+                const fw = db.warehouses.find(w=>w.type==='factory');
+                if(cw) cw.name = db.systemConfig.companyName + '仓库';
+                if(fw) fw.name = db.systemConfig.factoryName + '仓库';
+            }
+            function getDBRef() { let db = getDB(); if(!db) db = initDB(); return db; }
+            function saveAndRefresh() { const db = getDB(); if(db) { syncWarehouseNames(db); saveDB(db); } refreshCurrentPage(); updateHeaderUI(); }
+
+            // ==================== 库存计算 ====================
+            function getInventory(db) {
+                const inv = {};
+                for(const r of db.materialRecords) {
+                    const k = 'material|'+r.materialId+'|';
+                    if(r.recordType==='purchase_inbound' && r.status==='confirmed') inv[k+r.toWarehouseId] = (inv[k+r.toWarehouseId]||0)+r.quantity;
+                    else if(r.recordType==='transfer_out') inv[k+r.fromWarehouseId] = (inv[k+r.fromWarehouseId]||0)-r.quantity;
+                    else if(r.recordType==='transfer_in' && r.status==='confirmed') inv[k+r.toWarehouseId] = (inv[k+r.toWarehouseId]||0)+r.quantity;
+                }
+                for(const r of db.productRecords) {
+                    const k = 'product|'+r.productId+'|';
+                    if(r.recordType==='production_inbound' && r.status==='confirmed') inv[k+r.toWarehouseId] = (inv[k+r.toWarehouseId]||0)+r.quantity;
+                    else if(r.recordType==='transfer_out') inv[k+r.fromWarehouseId] = (inv[k+r.fromWarehouseId]||0)-r.quantity;
+                    else if(r.recordType==='transfer_in' && r.status==='confirmed') inv[k+r.toWarehouseId] = (inv[k+r.toWarehouseId]||0)+r.quantity;
+                }
+                return inv;
+            }
+            function getItemInventory(db, type, itemId, warehouseId) {
+                const inv = getInventory(db);
+                return inv[type+'|'+itemId+'|'+warehouseId] || 0;
+            }
+
+            // ==================== UI工具 ====================
+            function showToast(msg) {
+                const c = document.getElementById('toastContainer');
+                const t = document.createElement('div'); t.className='toast'; t.textContent=msg;
+                c.appendChild(t); setTimeout(()=>t.remove(),2500);
+            }
+            function formatDate(iso) {
+                if(!iso) return '-';
+                const d = new Date(iso), p = n=>String(n).padStart(2,'0');
+                return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+            }
+            function getRecordTypeLabel(t) { const m={purchase_inbound:'采购入库',transfer_out:'调拨出库',transfer_in:'调拨入库',production_inbound:'生产入库'}; return m[t]||t; }
+
+            // ==================== 用户状态 ====================
+            let currentUser = null, currentRole = null, currentDisplayName = '';
+            function checkAutoLogin() {
+                const saved = sessionStorage.getItem('mfs_current_user');
+                if(saved) {
+                    try {
+                        const user = JSON.parse(saved);
+                        const db = getDBRef();
+                        const found = db.users.find(u=>u.id===user.id);
+                        if(found) {
+                            currentUser=found; currentRole=found.role; currentDisplayName=found.displayName||found.username;
+                            document.getElementById('loginPage').style.display='none';
+                            document.getElementById('mainApp').style.display='block';
+                            updateHeaderUI(); buildTabNav(); switchPage('dashboard'); return;
+                        }
+                    }catch(e){}
+                }
+                document.getElementById('loginPage').style.display='block';
+                document.getElementById('mainApp').style.display='none';
+            }
+            function updateHeaderUI() {
+                if(!currentUser) return;
+                document.getElementById('headerUser').textContent = '👤 ' + currentDisplayName;
+                const db = getDBRef();
+                const label = currentRole==='yabang' ? db.systemConfig.companyName : db.systemConfig.factoryName;
+                document.getElementById('headerRole').textContent = label;
+                document.getElementById('headerTitle').textContent = label + ' · 物料管理';
+            }
+
+            // ==================== 登录注册 ====================
+            window.showRegister = ()=>{ document.getElementById('loginForm').style.display='none'; document.getElementById('registerForm').style.display='block'; };
+            window.showLogin = ()=>{ document.getElementById('registerForm').style.display='none'; document.getElementById('loginForm').style.display='block'; };
+            window.doLogin = function() {
+                const u = document.getElementById('loginUsername').value.trim();
+                const p = document.getElementById('loginPassword').value.trim();
+                if(!u||!p) { showToast('⚠️ 请输入用户名和密码'); return; }
+                const db = getDBRef();
+                const user = db.users.find(x=>x.username===u && x.password===p);
+                if(!user) { showToast('⚠️ 用户名或密码错误'); return; }
+                currentUser=user; currentRole=user.role; currentDisplayName=user.displayName||user.username;
+                sessionStorage.setItem('mfs_current_user', JSON.stringify(user));
+                document.getElementById('loginPage').style.display='none';
+                document.getElementById('mainApp').style.display='block';
+                updateHeaderUI(); buildTabNav(); switchPage('dashboard');
+            };
+            window.doRegister = function() {
+                const u = document.getElementById('regUsername').value.trim();
+                const p = document.getElementById('regPassword').value.trim();
+                const p2 = document.getElementById('regPassword2').value.trim();
+                const role = document.getElementById('regRole').value;
+                const name = document.getElementById('regDisplayName').value.trim();
+                if(!u||!p||!name) { showToast('⚠️ 请填写所有字段'); return; }
+                if(p!==p2) { showToast('⚠️ 两次密码不一致'); return; }
+                if(p.length<4) { showToast('⚠️ 密码至少4位'); return; }
+                const db = getDBRef();
+                if(db.users.find(x=>x.username===u)) { showToast('⚠️ 用户名已存在'); return; }
+                db.users.push({ id:'user_'+(db.idCounter++), username:u, password:p, role, displayName:name, createdAt:new Date().toISOString() });
+                saveDB(db);
+                showToast('✅ 注册成功，请登录');
+                showLogin();
+                ['regUsername','regPassword','regPassword2','regDisplayName'].forEach(id=>document.getElementById(id).value='');
+            };
+            window.doLogout = function() {
+                currentUser=null; currentRole=null; sessionStorage.removeItem('mfs_current_user');
+                document.getElementById('mainApp').style.display='none';
+                document.getElementById('loginPage').style.display='block';
+                document.getElementById('tabNav').innerHTML=''; document.getElementById('mainContent').innerHTML='';
+            };
+
+            // ==================== Tab导航 ====================
+            function buildTabNav() {
+                const tabs = [
+                    {id:'dashboard',label:'📊 仪表盘',roles:['yabang','factory']},
+                    {id:'materialInbound',label:'📥 物料入库',roles:['yabang','factory']},
+                    {id:'materialTransfer',label:'🚚 物料调拨',roles:['yabang','factory']},
+                    {id:'productInbound',label:'🏗️ 成品入库',roles:['factory']},
+                    {id:'productTransfer',label:'📬 成品发货',roles:['yabang','factory']},
+                    {id:'inventory',label:'📋 库存查询',roles:['yabang','factory']},
+                    {id:'records',label:'📝 流转记录',roles:['yabang','factory']},
+                    {id:'orders',label:'📋 订单管理',roles:['yabang']},
+                    {id:'bom',label:'🔩 BOM清单',roles:['yabang','factory']},
+                    {id:'settings',label:'⚙️ 设置',roles:['yabang','factory']}
+                ];
+                const filtered = tabs.filter(t=>t.roles.includes(currentRole));
+                const nav = document.getElementById('tabNav');
+                nav.innerHTML = filtered.map(t=>`<button class="tab-btn" data-page="${t.id}">${t.label}</button>`).join('');
+                nav.querySelectorAll('.tab-btn').forEach(btn=>btn.addEventListener('click',function(){switchPage(this.dataset.page);}));
+            }
+
+            // ==================== 页面切换 ====================
+            function switchPage(name) {
+                const mc = document.getElementById('mainContent');
+                mc.innerHTML = `<div class="page active" id="page-${name}"></div>`;
+                document.querySelectorAll('#tabNav .tab-btn').forEach(b=>b.classList.remove('active'));
+                const btn = document.querySelector(`#tabNav .tab-btn[data-page="${name}"]`);
+                if(btn) btn.classList.add('active');
+                renderPageContent(name, document.getElementById('page-'+name));
+            }
+            function refreshCurrentPage() {
+                const active = document.querySelector('#mainContent .page.active');
+                if(active) renderPageContent(active.id.replace('page-',''), active);
+            }
+
+            // ==================== 各页面渲染 ====================
+            function renderPageContent(name, container) {
+                switch(name) {
+                    case 'dashboard': renderDashboard(container); break;
+                    case 'materialInbound': renderMaterialInbound(container); break;
+                    case 'materialTransfer': renderMaterialTransfer(container); break;
+                    case 'productInbound': renderProductInbound(container); break;
+                    case 'productTransfer': renderProductTransfer(container); break;
+                    case 'inventory': renderInventoryPage(container); break;
+                    case 'records': renderRecordsPage(container); break;
+                    case 'orders': renderOrdersPage(container); break;
+                    case 'bom': renderBOMPage(container); break;
+                    case 'settings': renderSettingsPage(container); break;
+                }
+            }
+
+            function renderDashboard(container) {
+                const db = getDBRef(); const inv = getInventory(db);
+                const cw = db.warehouses.find(w=>w.type==='company'), fw = db.warehouses.find(w=>w.type==='factory');
+                let mc=0,mf=0,pc=0,pf=0;
+                for(const [k,q] of Object.entries(inv)) {
+                    const p=k.split('|');
+                    if(p[0]==='material') { if(p[2]===cw?.id) mc+=q; if(p[2]===fw?.id) mf+=q; }
+                    else { if(p[2]===cw?.id) pc+=q; if(p[2]===fw?.id) pf+=q; }
+                }
+                const pendMat = db.materialRecords.filter(r=>r.recordType==='transfer_out'&&r.status==='pending').length;
+                const pendProd = db.productRecords.filter(r=>r.recordType==='transfer_out'&&r.status==='pending').length;
+                const myMat = currentRole==='yabang'?mc:mf, myProd = currentRole==='yabang'?pc:pf;
+                const whName = currentRole==='yabang'? (cw?.name||'公司仓库') : (fw?.name||'工厂仓库');
+                container.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card"><span style="font-size:28px;">📦</span><div class="stat-value">${myMat}</div><div class="stat-label">我的物料库存</div></div>
+                    <div class="stat-card success"><span style="font-size:28px;">🖱️</span><div class="stat-value">${myProd}</div><div class="stat-label">我的成品库存</div></div>
+                    <div class="stat-card warn"><span style="font-size:28px;">📍</span><div class="stat-value" style="font-size:14px;">${whName}</div><div class="stat-label">当前仓库</div></div>
+                    <div class="stat-card danger"><span style="font-size:28px;">⏳</span><div class="stat-value">${currentRole==='yabang'?pendProd:pendMat}</div><div class="stat-label">待确认事项</div></div>
+                </div>
+                <div class="card"><h2>⏳ 待处理</h2><div id="dashPending"></div></div>
+                <div class="card"><h2>🔗 快捷操作</h2><div style="display:flex;flex-wrap:wrap;gap:6px;" id="dashQuick"></div></div>`;
+                const dp = container.querySelector('#dashPending');
+                let ph = '';
+                if(currentRole==='yabang') {
+                    const pp = db.productRecords.filter(r=>r.recordType==='transfer_out'&&r.status==='pending');
+                    ph = pp.length? pp.map(r=>`<div style="padding:6px 0;">📬 ${r.productName} x${r.quantity} <button class="btn btn-sm btn-success" onclick="quickConfirmProd('${r.id}')">确认签收</button></div>`).join('') : '<div class="empty-state">✅ 暂无待签收</div>';
+                } else {
+                    const pm = db.materialRecords.filter(r=>r.recordType==='transfer_out'&&r.status==='pending');
+                    ph = pm.length? pm.map(r=>`<div style="padding:6px 0;">📦 ${r.materialName} x${r.quantity} <button class="btn btn-sm btn-warning" onclick="quickConfirmMat('${r.id}')">确认收货</button></div>`).join('') : '<div class="empty-state">✅ 暂无待确认调拨</div>';
+                }
+                dp.innerHTML = ph;
+                const dq = container.querySelector('#dashQuick');
+                let btns = '<button class="btn btn-primary btn-sm" onclick="switchPage(\'materialInbound\')">📥 物料入库</button>';
+                btns += '<button class="btn btn-warning btn-sm" onclick="switchPage(\'materialTransfer\')">🚚 物料调拨</button>';
+                if(currentRole==='factory') btns += '<button class="btn btn-success btn-sm" onclick="switchPage(\'productInbound\')">🏗️ 成品入库</button>';
+                btns += '<button class="btn btn-outline btn-sm" onclick="switchPage(\'productTransfer\')">📬 成品发货</button>';
+                btns += '<button class="btn btn-outline btn-sm" onclick="switchPage(\'inventory\')">📋 库存查询</button>';
+                if(currentRole==='yabang') btns += '<button class="btn btn-outline btn-sm" onclick="switchPage(\'orders\')">📋 订单管理</button>';
+                dq.innerHTML = btns;
+            }
+            window.quickConfirmMat = function(rid) {
+                const db=getDBRef(); const rec=db.materialRecords.find(r=>r.id===rid); if(!rec||rec.status==='confirmed') return;
+                const op=prompt('确认人姓名：',currentDisplayName); if(!op) return;
+                rec.status='confirmed';
+                db.materialRecords.push({id:'mr_'+(db.idCounter++),recordType:'transfer_in',materialId:rec.materialId,materialName:rec.materialName,quantity:rec.quantity,fromWarehouseId:rec.fromWarehouseId,toWarehouseId:rec.toWarehouseId,relatedRecordId:rec.id,operatorName:op,operatorCompany:'factory',status:'confirmed',note:'确认收货',createdAt:new Date().toISOString()});
+                saveAndRefresh(); showToast('✅ 收货确认'); switchPage('dashboard');
+            };
+            window.quickConfirmProd = function(rid) {
+                const db=getDBRef(); const rec=db.productRecords.find(r=>r.id===rid); if(!rec||rec.status==='confirmed') return;
+                const op=prompt('签收人姓名：',currentDisplayName); if(!op) return;
+                rec.status='confirmed';
+                db.productRecords.push({id:'pr_'+(db.idCounter++),recordType:'transfer_in',productId:rec.productId,productName:rec.productName,quantity:rec.quantity,fromWarehouseId:rec.fromWarehouseId,toWarehouseId:rec.toWarehouseId,relatedRecordId:rec.id,operatorName:op,operatorCompany:'yabang',status:'confirmed',note:'确认签收',createdAt:new Date().toISOString()});
+                saveAndRefresh(); showToast('✅ 签收确认'); switchPage('dashboard');
+            };
+
+            function renderMaterialInbound(container) {
+                const db=getDBRef(); const defWh=currentRole==='yabang'?'wh_company':'wh_factory';
+                container.innerHTML=`
+                <div class="card"><h2>📥 物料采购入库</h2>
+                <div class="form-row"><div class="form-group"><label>物料</label><select id="matInMat">${db.materials.map(m=>`<option value="${m.id}">${m.name}(${m.sku})</option>`).join('')}</select></div>
+                <div class="form-group"><label>数量</label><input type="number" id="matInQty" min="1"></div></div>
+                <div class="form-row"><div class="form-group"><label>仓库</label><select id="matInWh">${db.warehouses.map(w=>`<option value="${w.id}" ${w.id===defWh?'selected':''}>${w.name}</option>`).join('')}</select></div>
+                <div class="form-group"><label>操作人</label><input type="text" id="matInOp" value="${currentDisplayName}"></div></div>
+                <div class="form-group"><label>备注</label><input type="text" id="matInNote"></div>
+                <button class="btn btn-primary btn-block" onclick="submitMatIn()">✅ 确认入库</button></div>
+                <div class="card"><h3>最近入库</h3><div class="table-wrap" id="matInRecent"></div></div>`;
+                renderMatInRecent(container.querySelector('#matInRecent'));
+            }
+            window.submitMatIn = function() {
+                const db=getDBRef(); const mid=document.getElementById('matInMat')?.value;
+                const qty=parseInt(document.getElementById('matInQty')?.value), wid=document.getElementById('matInWh')?.value;
+                const op=document.getElementById('matInOp')?.value.trim(), note=document.getElementById('matInNote')?.value.trim();
+                if(!mid||!qty||!wid||!op){showToast('⚠️ 请填写完整');return;} if(qty<=0){showToast('⚠️ 数量>0');return;}
+                const mat=db.materials.find(m=>m.id===mid), wh=db.warehouses.find(w=>w.id===wid);
+                db.materialRecords.push({id:'mr_'+(db.idCounter++),recordType:'purchase_inbound',materialId:mid,materialName:mat?mat.name:mid,quantity:qty,toWarehouseId:wid,operatorName:op,operatorCompany:wh?wh.type:currentRole,status:'confirmed',note,createdAt:new Date().toISOString()});
+                saveAndRefresh(); showToast('✅ 入库成功 +'+qty); switchPage('materialInbound');
+            };
+            function renderMatInRecent(cont) {
+                const db=getDBRef(); const recs=db.materialRecords.filter(r=>r.recordType==='purchase_inbound').sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).slice(0,10);
+                if(!recs.length){cont.innerHTML='<div class="empty-state">暂无</div>';return;}
+                cont.innerHTML=`<table><tr><th>时间</th><th>物料</th><th>数量</th><th>仓库</th><th>操作人</th></tr>${recs.map(r=>`<tr><td>${formatDate(r.createdAt)}</td><td>${r.materialName}</td><td>${r.quantity}</td><td>${db.warehouses.find(w=>w.id===r.toWarehouseId)?.name||r.toWarehouseId}</td><td>${r.operatorName}</td></tr>`).join('')}</table>`;
+            }
+
+            function renderMaterialTransfer(container) {
+                const db=getDBRef(); const from=currentRole==='yabang'?'wh_company':'wh_factory', to=currentRole==='yabang'?'wh_factory':'wh_company';
+                container.innerHTML=`
+                <div class="card"><h2>🚚 物料调拨</h2>
+                <div class="form-row"><div class="form-group"><label>物料</label><select id="matTransMat">${db.materials.map(m=>`<option value="${m.id}">${m.name}(${m.sku})</option>`).join('')}</select></div>
+                <div class="form-group"><label>数量</label><input type="number" id="matTransQty" min="1"></div></div>
+                <div class="form-row"><div class="form-group"><label>来源</label><select id="matTransFrom">${db.warehouses.map(w=>`<option value="${w.id}" ${w.id===from?'selected':''}>${w.name}</option>`).join('')}</select></div>
+                <div class="form-group"><label>目标</label><select id="matTransTo">${db.warehouses.map(w=>`<option value="${w.id}" ${w.id===to?'selected':''}>${w.name}</option>`).join('')}</select></div></div>
+                <div class="form-row"><div class="form-group"><label>操作人</label><input type="text" id="matTransOp" value="${currentDisplayName}"></div>
+                <div class="form-group"><label>备注</label><input type="text" id="matTransNote"></div></div>
+                <button class="btn btn-warning btn-block" onclick="submitMatTrans()">📤 发起调拨</button></div>
+                <div class="card"><h3>待确认调拨</h3><div class="table-wrap" id="pendTransTbl"></div></div>`;
+                renderPendTrans(container.querySelector('#pendTransTbl'));
+            }
+            window.submitMatTrans = function() {
+                const db=getDBRef(); const mid=document.getElementById('matTransMat')?.value;
+                const qty=parseInt(document.getElementById('matTransQty')?.value), from=document.getElementById('matTransFrom')?.value, to=document.getElementById('matTransTo')?.value;
+                const op=document.getElementById('matTransOp')?.value.trim(), note=document.getElementById('matTransNote')?.value.trim();
+                if(!mid||!qty||!from||!to||!op){showToast('⚠️ 请填写完整');return;} if(qty<=0){showToast('⚠️ 数量>0');return;} if(from===to){showToast('⚠️ 仓库不能相同');return;}
+                const stock=getItemInventory(db,'material',mid,from); if(stock<qty){showToast('⚠️ 库存不足(当前:'+stock+')');return;}
+                const mat=db.materials.find(m=>m.id===mid), fw=db.warehouses.find(w=>w.id===from);
+                db.materialRecords.push({id:'mr_'+(db.idCounter++),recordType:'transfer_out',materialId:mid,materialName:mat?mat.name:mid,quantity:qty,fromWarehouseId:from,toWarehouseId:to,operatorName:op,operatorCompany:fw?fw.type:currentRole,status:'pending',note,createdAt:new Date().toISOString()});
+                saveAndRefresh(); showToast('📤 调拨已发起'); switchPage('materialTransfer');
+            };
+            function renderPendTrans(cont) {
+                const db=getDBRef(); const recs=db.materialRecords.filter(r=>r.recordType==='transfer_out'&&r.status==='pending');
+                if(!recs.length){cont.innerHTML='<div class="empty-state">✅ 暂无</div>';return;}
+                cont.innerHTML=`<table><tr><th>时间</th><th>物料</th><th>数量</th><th>来源</th><th>目标</th><th>操作</th></tr>${recs.map(r=>`<tr><td>${formatDate(r.createdAt)}</td><td>${r.materialName}</td><td>${r.quantity}</td><td>${db.warehouses.find(w=>w.id===r.fromWarehouseId)?.name}</td><td>${db.warehouses.find(w=>w.id===r.toWarehouseId)?.name}</td><td><button class="btn btn-sm btn-warning" onclick="openConfirmModal('material','${r.id}')">确认收货</button></td></tr>`).join('')}</table>`;
+            }
+
+            function renderProductInbound(container) {
+                const db=getDBRef(); container.innerHTML=`
+                <div class="card"><h2>🏗️ 成品入库</h2>
+                <div class="form-row"><div class="form-group"><label>成品</label><select id="prodInProd">${db.products.map(p=>`<option value="${p.id}">${p.name}(${p.sku})</option>`).join('')}</select></div>
+                <div class="form-group"><label>数量</label><input type="number" id="prodInQty" min="1"></div></div>
+                <div class="form-row"><div class="form-group"><label>仓库</label><select id="prodInWh">${db.warehouses.filter(w=>w.type==='factory').map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select></div>
+                <div class="form-group"><label>操作人</label><input type="text" id="prodInOp" value="${currentDisplayName}"></div></div>
+                <div class="form-group"><label>备注</label><input type="text" id="prodInNote"></div>
+                <button class="btn btn-success btn-block" onclick="submitProdIn()">✅ 确认入库</button></div>`;
+            }
+            window.submitProdIn = function() {
+                const db=getDBRef(); const pid=document.getElementById('prodInProd')?.value;
+                const qty=parseInt(document.getElementById('prodInQty')?.value), wid=document.getElementById('prodInWh')?.value;
+                const op=document.getElementById('prodInOp')?.value.trim(), note=document.getElementById('prodInNote')?.value.trim();
+                if(!pid||!qty||!wid||!op){showToast('⚠️ 请填写完整');return;}
+                const prod=db.products.find(p=>p.id===pid);
+                db.productRecords.push({id:'pr_'+(db.idCounter++),recordType:'production_inbound',productId:pid,productName:prod?prod.name:pid,quantity:qty,toWarehouseId:wid,operatorName:op,operatorCompany:'factory',status:'confirmed',note,createdAt:new Date().toISOString()});
+                saveAndRefresh(); showToast('✅ 成品入库 +'+qty); switchPage('productInbound');
+            };
+
+            function renderProductTransfer(container) {
+                const db=getDBRef(); const from=currentRole==='factory'?'wh_factory':'wh_company', to=currentRole==='factory'?'wh_company':'wh_factory';
+                container.innerHTML=`
+                <div class="card"><h2>📬 成品发货</h2>
+                <div class="form-row"><div class="form-group"><label>成品</label><select id="prodTransProd">${db.products.map(p=>`<option value="${p.id}">${p.name}(${p.sku})</option>`).join('')}</select></div>
+                <div class="form-group"><label>数量</label><input type="number" id="prodTransQty" min="1"></div></div>
+                <div class="form-row"><div class="form-group"><label>来源</label><select id="prodTransFrom">${db.warehouses.map(w=>`<option value="${w.id}" ${w.id===from?'selected':''}>${w.name}</option>`).join('')}</select></div>
+                <div class="form-group"><label>目标</label><select id="prodTransTo">${db.warehouses.map(w=>`<option value="${w.id}" ${w.id===to?'selected':''}>${w.name}</option>`).join('')}</select></div></div>
+                <div class="form-row"><div class="form-group"><label>操作人</label><input type="text" id="prodTransOp" value="${currentDisplayName}"></div>
+                <div class="form-group"><label>备注</label><input type="text" id="prodTransNote"></div></div>
+                <button class="btn btn-warning btn-block" onclick="submitProdTrans()">📤 发起发货</button></div>
+                <div class="card"><h3>待签收成品</h3><div class="table-wrap" id="pendProdTbl"></div></div>`;
+                renderPendProd(container.querySelector('#pendProdTbl'));
+            }
+            window.submitProdTrans = function() {
+                const db=getDBRef(); const pid=document.getElementById('prodTransProd')?.value;
+                const qty=parseInt(document.getElementById('prodTransQty')?.value), from=document.getElementById('prodTransFrom')?.value, to=document.getElementById('prodTransTo')?.value;
+                const op=document.getElementById('prodTransOp')?.value.trim(), note=document.getElementById('prodTransNote')?.value.trim();
+                if(!pid||!qty||!from||!to||!op){showToast('⚠️ 请填写完整');return;} if(from===to){showToast('⚠️ 仓库不能相同');return;}
+                const stock=getItemInventory(db,'product',pid,from); if(stock<qty){showToast('⚠️ 库存不足');return;}
+                const prod=db.products.find(p=>p.id===pid), fw=db.warehouses.find(w=>w.id===from);
+                db.productRecords.push({id:'pr_'+(db.idCounter++),recordType:'transfer_out',productId:pid,productName:prod?prod.name:pid,quantity:qty,fromWarehouseId:from,toWarehouseId:to,operatorName:op,operatorCompany:fw?fw.type:currentRole,status:'pending',note,createdAt:new Date().toISOString()});
+                saveAndRefresh(); showToast('📤 发货已发起'); switchPage('productTransfer');
+            };
+            function renderPendProd(cont) {
+                const db=getDBRef(); const recs=db.productRecords.filter(r=>r.recordType==='transfer_out'&&r.status==='pending');
+                if(!recs.length){cont.innerHTML='<div class="empty-state">✅ 暂无</div>';return;}
+                cont.innerHTML=`<table><tr><th>时间</th><th>成品</th><th>数量</th><th>来源</th><th>目标</th><th>操作</th></tr>${recs.map(r=>`<tr><td>${formatDate(r.createdAt)}</td><td>${r.productName}</td><td>${r.quantity}</td><td>${db.warehouses.find(w=>w.id===r.fromWarehouseId)?.name}</td><td>${db.warehouses.find(w=>w.id===r.toWarehouseId)?.name}</td><td><button class="btn btn-sm btn-success" onclick="openConfirmModal('product','${r.id}')">确认签收</button></td></tr>`).join('')}</table>`;
+            }
+
+            window.openConfirmModal = function(type, rid) {
+                pendingConfirmInfo = {type, rid};
+                const db=getDBRef(); let rec;
+                if(type==='material') rec=db.materialRecords.find(r=>r.id===rid);
+                else rec=db.productRecords.find(r=>r.id===rid);
+                if(!rec||rec.status==='confirmed'){showToast('已确认');return;}
+                document.getElementById('confirmModalTitle').textContent = type==='material'?'确认物料收货':'确认成品签收';
+                document.getElementById('confirmModalMsg').textContent = `确认收到：${rec.materialName||rec.productName}，数量：${rec.quantity}`;
+                document.getElementById('confirmOperator').value = currentDisplayName;
+                document.getElementById('confirmModalBtn').onclick = executeConfirm;
+                document.getElementById('confirmModal').classList.add('show');
+            };
+            window.closeModal = ()=>{ document.getElementById('confirmModal').classList.remove('show'); pendingConfirmInfo=null; };
+            function executeConfirm() {
+                if(!pendingConfirmInfo) return;
+                const op = document.getElementById('confirmOperator').value.trim();
+                if(!op){showToast('⚠️ 请输入确认人'); return;}
+                const db=getDBRef(); const {type, rid}=pendingConfirmInfo;
+                if(type==='material'){
+                    const rec=db.materialRecords.find(r=>r.id===rid); if(!rec||rec.status==='confirmed'){showToast('已确认');closeModal();return;}
+                    rec.status='confirmed';
+                    db.materialRecords.push({id:'mr_'+(db.idCounter++),recordType:'transfer_in',materialId:rec.materialId,materialName:rec.materialName,quantity:rec.quantity,fromWarehouseId:rec.fromWarehouseId,toWarehouseId:rec.toWarehouseId,relatedRecordId:rec.id,operatorName:op,operatorCompany:'factory',status:'confirmed',note:'确认收货',createdAt:new Date().toISOString()});
+                }else{
+                    const rec=db.productRecords.find(r=>r.id===rid); if(!rec||rec.status==='confirmed'){showToast('已确认');closeModal();return;}
+                    rec.status='confirmed';
+                    db.productRecords.push({id:'pr_'+(db.idCounter++),recordType:'transfer_in',productId:rec.productId,productName:rec.productName,quantity:rec.quantity,fromWarehouseId:rec.fromWarehouseId,toWarehouseId:rec.toWarehouseId,relatedRecordId:rec.id,operatorName:op,operatorCompany:'yabang',status:'confirmed',note:'确认签收',createdAt:new Date().toISOString()});
+                }
+                saveAndRefresh(); showToast('✅ 确认成功'); closeModal();
+                switchPage(type==='material'?'materialTransfer':'productTransfer');
+            }
+            document.getElementById('confirmModal').addEventListener('click',function(e){if(e.target===this) closeModal();});
+            let pendingConfirmInfo = null;
+
+            function renderInventoryPage(container) {
+                const db=getDBRef();
+                container.innerHTML=`
+                <div class="card"><h2>📋 实时库存</h2>
+                <div class="form-row"><div class="form-group"><label>类型</label><select id="invType" onchange="renderInvTable()"><option value="all">全部</option><option value="material">物料</option><option value="product">成品</option></select></div>
+                <div class="form-group"><label>仓库</label><select id="invWh" onchange="renderInvTable()"><option value="all">全部</option>${db.warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select></div></div>
+                <button class="btn btn-outline btn-sm" onclick="exportInv()">📥 导出</button>
+                <div class="table-wrap" id="invTable" style="margin-top:8px;"></div></div>`;
+                window.renderInvTable = ()=>{
+                    const db=getDBRef(); const inv=getInventory(db); const tf=document.getElementById('invType')?.value||'all', wf=document.getElementById('invWh')?.value||'all';
+                    const tbl=document.getElementById('invTable'); let rows=[];
+                    for(const [k,q] of Object.entries(inv)){ if(!q) continue; const p=k.split('|');
+                        if(tf!=='all'&&p[0]!==tf) continue; if(wf!=='all'&&p[2]!==wf) continue;
+                        let name=p[1]; const src=p[0]==='material'?db.materials:db.products; const item=src.find(x=>x.id===p[1]); if(item) name=item.name+' ('+(item.sku||'')+')';
+                        const wh=db.warehouses.find(w=>w.id===p[2]); rows.push({type:p[0]==='material'?'📦物料':'🖱️成品',name,wh:wh?wh.name:p[2],q});
+                    }
+                    tbl.innerHTML= rows.length? `<table><tr><th>类型</th><th>名称</th><th>仓库</th><th>数量</th></tr>${rows.map(r=>`<tr><td>${r.type}</td><td>${r.name}</td><td>${r.wh}</td><td><strong>${r.q}</strong></td></tr>`).join('')}</table>` : '<div class="empty-state">暂无库存</div>';
+                };
+                window.renderInvTable();
+            }
+            window.exportInv = ()=>{
+                const db=getDBRef(); const inv=getInventory(db); const data=[['类型','名称','SKU','仓库','数量']];
+                for(const [k,q] of Object.entries(inv)){ if(!q) continue; const p=k.split('|');
+                    const src=p[0]==='material'?db.materials:db.products; const item=src.find(x=>x.id===p[1]);
+                    const wh=db.warehouses.find(w=>w.id===p[2]);
+                    data.push([p[0]==='material'?'物料':'成品',item?item.name:p[1],item?item.sku:'',wh?wh.name:p[2],q]);
+                }
+                downloadExcel(data,'库存报表');
+            };
+
+            function renderRecordsPage(container) {
+                container.innerHTML=`
+                <div class="card"><h2>📝 流转记录</h2>
+                <div class="form-row"><div class="form-group"><label>类型</label><select id="recType" onchange="renderRecTable()"><option value="all">全部</option><option value="material">物料</option><option value="product">成品</option></select></div>
+                <div class="form-group"><label>记录</label><select id="recSub" onchange="renderRecTable()"><option value="all">全部</option><option value="purchase_inbound">采购入库</option><option value="transfer_out">调拨出库</option><option value="transfer_in">调拨入库</option><option value="production_inbound">生产入库</option></select></div></div>
+                <button class="btn btn-outline btn-sm" onclick="exportRec()">📥 导出</button>
+                <div class="table-wrap" id="recTable" style="margin-top:8px;"></div></div>`;
+                window.renderRecTable = ()=>{
+                    const db=getDBRef(); const tf=document.getElementById('recType')?.value||'all', sf=document.getElementById('recSub')?.value||'all';
+                    let all=[];
+                    if(tf==='all'||tf==='material') all.push(...db.materialRecords.map(r=>({...r,sourceType:'物料',itemName:r.materialName})));
+                    if(tf==='all'||tf==='product') all.push(...db.productRecords.map(r=>({...r,sourceType:'成品',itemName:r.productName})));
+                    if(sf!=='all') all=all.filter(r=>r.recordType===sf);
+                    all.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); all=all.slice(0,100);
+                    const tbl=document.getElementById('recTable');
+                    tbl.innerHTML= all.length? `<table><tr><th>时间</th><th>类型</th><th>名称</th><th>数量</th><th>来源</th><th>目标</th><th>操作人</th><th>状态</th></tr>${all.map(r=>`<tr><td>${formatDate(r.createdAt)}</td><td><span class="tag ${r.recordType==='purchase_inbound'?'tag-blue':r.recordType==='transfer_out'?'tag-red':'tag-green'}">${getRecordTypeLabel(r.recordType)}</span></td><td>${r.itemName}</td><td>${r.quantity}</td><td>${db.warehouses.find(w=>w.id===r.fromWarehouseId)?.name||'-'}</td><td>${db.warehouses.find(w=>w.id===r.toWarehouseId)?.name||'-'}</td><td>${r.operatorName}</td><td>${r.status==='confirmed'?'<span class="tag tag-green">已确认</span>':'<span class="tag tag-yellow">待确认</span>'}</td></tr>`).join('')}</table>` : '<div class="empty-state">暂无记录</div>';
+                };
+                window.renderRecTable();
+            }
+            window.exportRec = ()=>{
+                const db=getDBRef(); const data=[['时间','来源','类型','名称','数量','来源仓库','目标仓库','操作人','状态']];
+                const all=[...db.materialRecords.map(r=>({...r,sourceType:'物料',itemName:r.materialName})),...db.productRecords.map(r=>({...r,sourceType:'成品',itemName:r.productName}))];
+                all.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+                for(const r of all.slice(0,500)){ const fw=db.warehouses.find(w=>w.id===r.fromWarehouseId), tw=db.warehouses.find(w=>w.id===r.toWarehouseId);
+                    data.push([formatDate(r.createdAt),r.sourceType,getRecordTypeLabel(r.recordType),r.itemName,r.quantity,fw?fw.name:r.fromWarehouseId||'-',tw?tw.name:r.toWarehouseId||'-',r.operatorName,r.status==='confirmed'?'已确认':'待确认']); }
+                downloadExcel(data,'流转记录');
+            };
+
+            function renderOrdersPage(container) {
+                const db=getDBRef();
+                container.innerHTML=`
+                <div class="card"><h2>📋 订单管理</h2>
+                <div class="form-row"><div class="form-group"><label>成品</label><select id="ordProd">${db.products.map(p=>`<option value="${p.id}">${p.name}(${p.sku})</option>`).join('')}</select></div>
+                <div class="form-group"><label>数量</label><input type="number" id="ordQty" min="1"></div></div>
+                <div class="form-group"><label>备注</label><input type="text" id="ordNote"></div>
+                <button class="btn btn-primary btn-block" onclick="createOrder()">📋 创建订单并计算物料需求</button></div>
+                <div id="orderResult"></div>
+                <div class="card"><h3>历史订单</h3><div class="table-wrap" id="orderHistory"></div></div>`;
+                renderOrderHistory(container.querySelector('#orderHistory'));
+            }
+            window.createOrder = function() {
+                const db=getDBRef(); const pid=document.getElementById('ordProd')?.value, qty=parseInt(document.getElementById('ordQty')?.value), note=document.getElementById('ordNote')?.value.trim();
+                if(!pid||!qty||qty<=0){showToast('⚠️ 请填写完整');return;}
+                const prod=db.products.find(p=>p.id===pid);
+                db.orders.push({id:'ord_'+(db.idCounter++),orderNo:'ORD-'+new Date().toISOString().slice(0,10).replace(/-/g,'')+'-'+String(db.idCounter).padStart(3,'0'),productId:pid,productName:prod?prod.name:pid,orderQuantity:qty,status:'pending',createdBy:currentDisplayName,createdByRole:'yabang',note,createdAt:new Date().toISOString()});
+                const boms=db.boms.filter(b=>b.productId===pid); const cw=db.warehouses.find(w=>w.type==='company'); const whId=cw?cw.id:'wh_company';
+                let html=`<div class="card"><h3>📊 ${prod?prod.name:''} ×${qty} 物料需求</h3><table><tr><th>物料</th><th>单件用量</th><th>总需求</th><th>库存(公司)</th><th>缺口</th></tr>`;
+                if(!boms.length) html+='<tr><td colspan="5">⚠️ 无BOM定义</td></tr>';
+                else for(const b of boms){ const need=b.quantity*qty, stock=getItemInventory(db,'material',b.materialId,whId), gap=Math.max(0,need-stock);
+                    html+=`<tr><td>${b.materialName}</td><td>${b.quantity}</td><td><strong>${need}</strong></td><td>${stock}</td><td style="color:${gap>0?'#DC2626':'#059669'}"><strong>${gap>0?'🔴 缺'+gap:'✅ 充足'}</strong></td></tr>`; }
+                html+='</table></div>';
+                document.getElementById('orderResult').innerHTML=html; saveAndRefresh(); showToast('✅ 订单已创建');
+                document.getElementById('ordQty').value=''; renderOrderHistory(document.getElementById('orderHistory'));
+            };
+            function renderOrderHistory(cont) {
+                const db=getDBRef(); const orders=db.orders.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+                cont.innerHTML=orders.length?`<table><tr><th>订单号</th><th>成品</th><th>数量</th><th>状态</th><th>创建人</th><th>时间</th></tr>${orders.map(o=>`<tr><td>${o.orderNo}</td><td>${o.productName}</td><td>${o.orderQuantity}</td><td><span class="tag ${o.status==='pending'?'tag-yellow':'tag-green'}">${o.status}</span></td><td>${o.createdBy}</td><td>${formatDate(o.createdAt)}</td></tr>`).join('')}</table>`:'<div class="empty-state">暂无订单</div>';
+            }
+
+            function renderBOMPage(container) {
+                const db=getDBRef();
+                container.innerHTML=`
+                <div class="card"><h2>🔩 BOM清单</h2>
+                <div class="form-row"><div class="form-group"><label>成品</label><select id="bomProd">${db.products.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
+                <div class="form-group"><label>物料</label><select id="bomMat">${db.materials.map(m=>`<option value="${m.id}">${m.name}</option>`).join('')}</select></div>
+                <div class="form-group"><label>用量</label><input type="number" id="bomQty" step="0.01" min="0.01" value="1"></div></div>
+                <button class="btn btn-success btn-sm" onclick="addBOM()">➕ 添加</button>
+                <div class="table-wrap" id="bomTable" style="margin-top:8px;"></div></div>`;
+                renderBOMTable(container.querySelector('#bomTable'));
+            }
+            window.addBOM = function() {
+                const db=getDBRef(); const pid=document.getElementById('bomProd')?.value, mid=document.getElementById('bomMat')?.value, qty=parseFloat(document.getElementById('bomQty')?.value);
+                if(!pid||!mid||!qty||qty<=0){showToast('⚠️ 填写完整');return;}
+                if(db.boms.find(b=>b.productId===pid&&b.materialId===mid)){showToast('⚠️ 已存在');return;}
+                const prod=db.products.find(p=>p.id===pid), mat=db.materials.find(m=>m.id===mid);
+                db.boms.push({id:'bom_'+(db.idCounter++),productId:pid,materialId:mid,quantity:qty,productName:prod?prod.name:pid,materialName:mat?mat.name:mid});
+                saveAndRefresh(); showToast('✅ 已添加'); switchPage('bom');
+            };
+            function renderBOMTable(cont) {
+                const db=getDBRef(); cont.innerHTML=db.boms.length?`<table><tr><th>成品</th><th>物料</th><th>用量</th><th>操作</th></tr>${db.boms.map(b=>`<tr><td>${b.productName}</td><td>${b.materialName}</td><td>${b.quantity}</td><td><button class="btn btn-sm btn-danger" onclick="delBOM('${b.id}')">删除</button></td></tr>`).join('')}</table>`:'<div class="empty-state">暂无</div>';
+            }
+            window.delBOM = function(id){ if(confirm('删除？')){ const db=getDBRef(); db.boms=db.boms.filter(b=>b.id!==id); saveAndRefresh(); showToast('已删除'); switchPage('bom'); } };
+
+            function renderSettingsPage(container) {
+                const db=getDBRef();
+                container.innerHTML=`
+                <div class="card"><h2>⚙️ 系统设置</h2>
+                <div class="form-row"><div class="form-group"><label>亚帮公司</label><input type="text" id="setCompany" value="${db.systemConfig.companyName}"></div>
+                <div class="form-group"><label>玻璃垫厂</label><input type="text" id="setFactory" value="${db.systemConfig.factoryName}"></div></div>
+                <button class="btn btn-primary btn-sm" onclick="saveSys()">💾 保存</button></div>
+                <div class="card"><h2>📦 物料管理</h2>
+                <div class="form-row"><div class="form-group"><label>名称</label><input type="text" id="newMatName"></div><div class="form-group"><label>SKU</label><input type="text" id="newMatSku"></div><div class="form-group"><label>单位</label><input type="text" id="newMatUnit" value="个"></div></div>
+                <button class="btn btn-success btn-sm" onclick="addMat()">➕ 添加</button>
+                <div class="table-wrap" id="matDefTbl" style="margin-top:6px;"></div>
+                <div style="margin-top:6px;display:flex;gap:6px;"><span class="file-upload-wrapper btn btn-outline btn-sm">📥 导入Excel<input type="file" accept=".xlsx,.xls" onchange="impMat(this)" style="position:absolute;opacity:0;width:100%;height:100%;cursor:pointer;"></span><button class="btn btn-outline btn-sm" onclick="exportMatTpl()">📥 下载模板</button></div></div>
+                <div class="card"><h2>🖱️ 成品管理</h2>
+                <div class="form-row"><div class="form-group"><label>名称</label><input type="text" id="newProdName"></div><div class="form-group"><label>SKU</label><input type="text" id="newProdSku"></div><div class="form-group"><label>单位</label><input type="text" id="newProdUnit" value="个"></div></div>
+                <button class="btn btn-success btn-sm" onclick="addProd()">➕ 添加</button>
+                <div class="table-wrap" id="prodDefTbl" style="margin-top:6px;"></div></div>
+                <div class="card"><h2>🗑️ 数据管理</h2><button class="btn btn-danger btn-sm" onclick="resetAll()">⚠️ 重置全部数据</button></div>`;
+                renderMatDef(container.querySelector('#matDefTbl')); renderProdDef(container.querySelector('#prodDefTbl'));
+            }
+            window.saveSys = function() {
+                const db=getDBRef(); const cn=document.getElementById('setCompany')?.value.trim(), fn=document.getElementById('setFactory')?.value.trim();
+                if(!cn||!fn){showToast('⚠️ 不能为空');return;} db.systemConfig.companyName=cn; db.systemConfig.factoryName=fn; syncWarehouseNames(db); saveAndRefresh(); showToast('✅ 已保存'); updateHeaderUI(); switchPage('settings');
+            };
+            window.addMat = function() {
+                const db=getDBRef(); const n=document.getElementById('newMatName')?.value.trim(); if(!n){showToast('⚠️ 名称');return;}
+                db.materials.push({id:'mat_'+(db.idCounter++),name:n,sku:document.getElementById('newMatSku')?.value.trim()||'-',unit:document.getElementById('newMatUnit')?.value.trim()||'个'});
+                saveAndRefresh(); showToast('✅ 已添加'); switchPage('settings');
+            };
+            window.addProd = function() {
+                const db=getDBRef(); const n=document.getElementById('newProdName')?.value.trim(); if(!n){showToast('⚠️ 名称');return;}
+                db.products.push({id:'prod_'+(db.idCounter++),name:n,sku:document.getElementById('newProdSku')?.value.trim()||'-',unit:document.getElementById('newProdUnit')?.value.trim()||'个'});
+                saveAndRefresh(); showToast('✅ 已添加'); switchPage('settings');
+            };
+            function renderMatDef(c){ const db=getDBRef(); c.innerHTML=db.materials.length?`<table><tr><th>名称</th><th>SKU</th><th>单位</th><th>操作</th></tr>${db.materials.map(m=>`<tr><td>${m.name}</td><td>${m.sku}</td><td>${m.unit}</td><td><button class="btn btn-sm btn-danger" onclick="delMat('${m.id}')">删除</button></td></tr>`).join('')}</table>`:'<div class="empty-state">暂无</div>'; }
+            function renderProdDef(c){ const db=getDBRef(); c.innerHTML=db.products.length?`<table><tr><th>名称</th><th>SKU</th><th>单位</th><th>操作</th></tr>${db.products.map(p=>`<tr><td>${p.name}</td><td>${p.sku}</td><td>${p.unit}</td><td><button class="btn btn-sm btn-danger" onclick="delProd('${p.id}')">删除</button></td></tr>`).join('')}</table>`:'<div class="empty-state">暂无</div>'; }
+            window.delMat = function(id){ if(confirm('删除？')){ const db=getDBRef(); db.materials=db.materials.filter(m=>m.id!==id); db.boms=db.boms.filter(b=>b.materialId!==id); saveAndRefresh(); showToast('已删除'); switchPage('settings'); } };
+            window.delProd = function(id){ if(confirm('删除？')){ const db=getDBRef(); db.products=db.products.filter(p=>p.id!==id); db.boms=db.boms.filter(b=>b.productId!==id); db.orders=db.orders.filter(o=>o.productId!==id); saveAndRefresh(); showToast('已删除'); switchPage('settings'); } };
+            window.impMat = function(input) {
+                const f=input.files[0]; if(!f) return; const r=new FileReader();
+                r.onload=function(e){
+                    try{ const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'}); const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1});
+                        const db=getDBRef(); let c=0; for(let i=1;i<rows.length;i++){ if(!rows[i][0]) continue; db.materials.push({id:'mat_'+(db.idCounter++),name:String(rows[i][0]).trim(),sku:rows[i][1]?String(rows[i][1]).trim():'-',unit:rows[i][2]?String(rows[i][2]).trim():'个'}); c++; }
+                        saveAndRefresh(); showToast('✅ 导入'+c+'条'); switchPage('settings'); }catch(er){showToast('⚠️ 解析失败');}
+                }; r.readAsArrayBuffer(f); input.value='';
+            };
+            window.exportMatTpl = ()=> downloadExcel([['物料名称','SKU编码','单位'],['袖套','XT-001','个']],'物料模板');
+            window.resetAll = function(){ if(confirm('确定重置？')){ localStorage.removeItem(STORAGE_KEY); memoryDB=null; initDB(); saveAndRefresh(); showToast('已重置'); switchPage('dashboard'); } };
+
+            function downloadExcel(data,name){
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Sheet1');
+                XLSX.writeFile(wb, name+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
+                showToast('📥 导出成功');
+            }
+
+            // 初始化
+            initDB();
+            checkAutoLogin();
+
+            // 暴露全局
+            window.switchPage=switchPage; window.doLogin=doLogin; window.doRegister=doRegister; window.doLogout=doLogout;
+            window.showRegister=showRegister; window.showLogin=showLogin;
+            window.submitMatIn=submitMatIn; window.submitMatTrans=submitMatTrans; window.submitProdIn=submitProdIn; window.submitProdTrans=submitProdTrans;
+            window.openConfirmModal=openConfirmModal; window.closeModal=closeModal;
+            window.createOrder=createOrder; window.addBOM=addBOM; window.delBOM=delBOM;
+            window.saveSys=saveSys; window.addMat=addMat; window.addProd=addProd; window.delMat=delMat; window.delProd=delProd;
+            window.impMat=impMat; window.exportMatTpl=exportMatTpl; window.exportInv=exportInv; window.exportRec=exportRec;
+            window.resetAll=resetAll; window.renderInvTable=renderInvTable; window.renderRecTable=renderRecTable;
+            window.quickConfirmMat=quickConfirmMat; window.quickConfirmProd=quickConfirmProd;
+        })();
+    </script>
+</body>
+</html>
