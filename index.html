@@ -84,7 +84,7 @@
 </head>
 <body>
     <div id="toastContainer"></div>
-    <div class="storage-warning" id="storageWarning">⚠️ 浏览器存储不可用，数据仅暂存内存（刷新后丢失）</div>
+    <div class="storage-warning" id="storageWarning">⚠️ 浏览器存储不可用，刷新后数据会丢失。请在「设置」页面导出数据备份，下次导入恢复。</div>
 
     <!-- 登录页面 -->
     <div id="loginPage" style="display:block;">
@@ -202,20 +202,20 @@
                 if(fw) fw.name = db.systemConfig.factoryName+'仓库';
             }
             function getDBRef() { let db=getDB(); if(!db) db=initDB(); return db; }
-            function saveAndRefresh() { const db=getDB(); if(db){ syncWarehouseNames(db); saveDB(db); } refreshCurrentPage(); updateHeaderUI(); }
+            function saveAndRefresh() { const db=getDBRef(); syncWarehouseNames(db); saveDB(db); refreshCurrentPage(); updateHeaderUI(); }
 
             function getInventory(db) {
                 const inv = {};
                 for(const r of db.materialRecords) {
                     const k = 'material|'+r.materialId+'|';
                     if(r.recordType==='purchase_inbound' && r.status==='confirmed') inv[k+r.toWarehouseId] = (inv[k+r.toWarehouseId]||0)+r.quantity;
-                    else if(r.recordType==='transfer_out') inv[k+r.fromWarehouseId] = (inv[k+r.fromWarehouseId]||0)-r.quantity;
+                    else if(r.recordType==='transfer_out' && r.status==='confirmed') inv[k+r.fromWarehouseId] = (inv[k+r.fromWarehouseId]||0)-r.quantity;
                     else if(r.recordType==='transfer_in' && r.status==='confirmed') inv[k+r.toWarehouseId] = (inv[k+r.toWarehouseId]||0)+r.quantity;
                 }
                 for(const r of db.productRecords) {
                     const k = 'product|'+r.productId+'|';
                     if((r.recordType==='production_inbound'||r.recordType==='transfer_in') && r.status==='confirmed') inv[k+r.toWarehouseId] = (inv[k+r.toWarehouseId]||0)+r.quantity;
-                    else if(r.recordType==='transfer_out'||r.recordType==='sales_outbound') inv[k+r.fromWarehouseId] = (inv[k+r.fromWarehouseId]||0)-r.quantity;
+                    else if((r.recordType==='transfer_out'||r.recordType==='sales_outbound') && r.status==='confirmed') inv[k+r.fromWarehouseId] = (inv[k+r.fromWarehouseId]||0)-r.quantity;
                 }
                 return inv;
             }
@@ -342,33 +342,48 @@
             function renderDashboard(container) {
                 const db=getDBRef(); const inv=getInventory(db);
                 const cw=db.warehouses.find(w=>w.type==='company'), fw=db.warehouses.find(w=>w.type==='factory');
+                // 统计有库存的SKU种数，而非数量加总（不同单位加总无意义）
                 let mc=0,mf=0,pc=0,pf=0;
                 for(const [k,q] of Object.entries(inv)) {
+                    if(q<=0) continue;
                     const p=k.split('|');
-                    if(p[0]==='material') { if(p[2]===cw?.id) mc+=q; if(p[2]===fw?.id) mf+=q; }
-                    else { if(p[2]===cw?.id) pc+=q; if(p[2]===fw?.id) pf+=q; }
+                    if(p[0]==='material') { if(p[2]===cw?.id) mc++; if(p[2]===fw?.id) mf++; }
+                    else { if(p[2]===cw?.id) pc++; if(p[2]===fw?.id) pf++; }
                 }
+                const role=currentRole;
                 container.innerHTML = `
                 <div class="stats-grid">
-                    <div class="stat-card"><div class="stat-value">${currentRole==='yabang'?mc:mf}</div><div class="stat-label">物料库存</div></div>
-                    <div class="stat-card"><div class="stat-value">${currentRole==='yabang'?pc:pf}</div><div class="stat-label">成品库存</div></div>
-                    <div class="stat-card warn"><div class="stat-value">${db.orders.filter(o=>o.status!=='completed').length}</div><div class="stat-label">待交付订单</div></div>
+                    <div class="stat-card"><div class="stat-value">${role==='yabang'?mc:mf}</div><div class="stat-label">${role==='yabang'?'公司':'工厂'}物料种类</div></div>
+                    <div class="stat-card"><div class="stat-value">${role==='yabang'?pc:pf}</div><div class="stat-label">${role==='yabang'?'公司':'工厂'}成品种类</div></div>
+                    <div class="stat-card"><div class="stat-value">${db.orders.filter(o=>o.status!=='completed').length}</div><div class="stat-label">待交付订单</div></div>
                     <div class="stat-card"><div class="stat-value">${db.productionOrders.filter(o=>o.status==='in_progress').length}</div><div class="stat-label">生产中工单</div></div>
-                </div>`;
+                </div>
+                <div class="card"><h3>📋 待办事项</h3>
+                <div style="font-size:12px;line-height:2;">
+                ${db.purchaseOrders.filter(o=>o.status==='pending').length>0?`<div>📦 有 <b>${db.purchaseOrders.filter(o=>o.status==='pending').length}</b> 张采购单待跟进</div>`:''}
+                ${db.productionOrders.filter(o=>o.status==='planned').length>0?`<div>🏭 有 <b>${db.productionOrders.filter(o=>o.status==='planned').length}</b> 张工单待开始生产</div>`:''}
+                ${db.orders.filter(o=>o.status==='ready').length>0?`<div>🚚 有 <b>${db.orders.filter(o=>o.status==='ready').length}</b> 张订单可发货（成品已就绪）</div>`:''}
+                ${db.orders.filter(o=>o.status!=='completed').length===0&&db.productionOrders.filter(o=>o.status==='in_progress').length===0?'<div style="color:var(--text2);">✅ 暂无待办事项</div>':''}
+                </div></div>`;
             }
 
             // ==================== 物料入库（含采购单关联） ====================
             function renderMaterialInbound(container) {
                 const db=getDBRef();
                 const pos = db.purchaseOrders.filter(po=>po.status!=='completed');
+                const recentRecords = db.materialRecords.filter(r=>r.recordType==='purchase_inbound').slice().reverse();
                 container.innerHTML = `
                 <div class="card"><h2>📥 物料采购入库</h2>
-                <div class="form-row"><div class="form-group"><label>物料</label><select id="matInMat">${db.materials.map(m=>`<option value="${m.id}">${m.name}(${m.sku})</option>`).join('')}</select></div>
-                <div class="form-group"><label>数量</label><input type="number" id="matInQty" min="1"></div></div>
-                <div class="form-row"><div class="form-group"><label>仓库</label><select id="matInWh">${db.warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select></div>
-                <div class="form-group"><label>关联采购单</label><select id="matInPO"><option value="">不关联</option>${pos.map(po=>`<option value="${po.id}">${po.poNumber} - ${po.materialName} (余${po.quantity-po.receivedQuantity})</option>`).join('')}</select></div></div>
+                <p class="subtitle">登记到货物料，可关联采购单自动更新到货进度</p>
+                <div class="form-row"><div class="form-group"><label>物料</label><select id="matInMat" onchange="checkPOMismatch()">${db.materials.map(m=>`<option value="${m.id}">${m.name}(${m.sku})</option>`).join('')}</select></div>
+                <div class="form-group"><label>数量</label><input type="number" id="matInQty" min="1" placeholder="请输入数量"></div></div>
+                <div class="form-row"><div class="form-group"><label>入库仓库</label><select id="matInWh">${db.warehouses.map(w=>`<option value="${w.id}">${w.name}</option>`).join('')}</select></div>
+                <div class="form-group"><label>关联采购单（可选）</label><select id="matInPO" onchange="checkPOMismatch()"><option value="">不关联</option>${pos.map(po=>`<option value="${po.id}" data-mat="${po.materialId}">${po.poNumber} - ${po.materialName}（余${po.quantity-(po.receivedQuantity||0)}）</option>`).join('')}</select></div></div>
+                <div id="poMismatchWarn" style="display:none;background:#FEF3C7;color:#92400E;padding:6px 10px;border-radius:6px;font-size:11px;margin-bottom:8px;">⚠️ 所选物料与采购单物料不一致，请确认</div>
                 <div class="form-row"><div class="form-group"><label>操作人</label><input type="text" id="matInOp" value="${currentDisplayName}"></div></div>
-                <button class="btn btn-primary btn-block" onclick="submitMatIn()">✅ 确认入库</button></div>`;
+                <button class="btn btn-primary btn-block" onclick="submitMatIn()">✅ 确认入库</button></div>
+                <div class="card"><h3>📝 近期入库记录</h3>
+                <div class="table-wrap">${recentRecords.length?`<table><tr><th>时间</th><th>物料</th><th>数量</th><th>仓库</th><th>关联采购单</th><th>操作人</th></tr>${recentRecords.map(r=>{const wh=db.warehouses.find(w=>w.id===r.toWarehouseId);const po=db.purchaseOrders.find(p=>p.id===r.purchaseOrderId);return`<tr><td>${formatDate(r.createdAt)}</td><td>${r.materialName}</td><td>${r.quantity}</td><td>${wh?.name||r.toWarehouseId}</td><td>${po?.poNumber||'-'}</td><td>${r.operatorName}</td></tr>`}).join('')}</table>`:'<div class="empty-state">暂无入库记录</div>'}</div></div>`;
             }
             window.submitMatIn = function() {
                 const db=getDBRef();
@@ -376,6 +391,7 @@
                 const wid=document.getElementById('matInWh')?.value, op=document.getElementById('matInOp')?.value.trim();
                 const poId=document.getElementById('matInPO')?.value;
                 if(!mid||!qty||!wid||!op){showToast('⚠️ 填写完整'); return;}
+                // 物料与采购单不一致时仍允许提交，但已有UI警告
                 const mat=db.materials.find(m=>m.id===mid);
                 db.materialRecords.push({id:'mr_'+(db.idCounter++),recordType:'purchase_inbound',materialId:mid,materialName:mat?mat.name:mid,quantity:qty,toWarehouseId:wid,operatorName:op,operatorCompany:'yabang',status:'confirmed',purchaseOrderId:poId||null,note:'',createdAt:new Date().toISOString()});
                 if(poId) {
@@ -384,18 +400,33 @@
                 }
                 saveAndRefresh(); showToast('✅ 入库成功'); switchPage('materialInbound');
             };
+            window.checkPOMismatch = function() {
+                const matId=document.getElementById('matInMat')?.value;
+                const poSel=document.getElementById('matInPO');
+                const warn=document.getElementById('poMismatchWarn');
+                if(!poSel||!warn) return;
+                const selectedOpt=poSel.options[poSel.selectedIndex];
+                const poMatId=selectedOpt?.dataset?.mat;
+                if(poMatId && poMatId!==matId) warn.style.display='block';
+                else warn.style.display='none';
+            };
 
             // ==================== 成品入库（关联生产工单） ====================
             function renderProductInbound(container) {
                 const db=getDBRef();
+                const stMap={'planned':'待开始','in_progress':'生产中','completed':'已完成'};
                 const activePOs = db.productionOrders.filter(o=>o.status==='in_progress'||o.status==='planned');
+                const recentRecords = db.productRecords.filter(r=>r.recordType==='production_inbound').slice().reverse();
                 container.innerHTML = `
                 <div class="card"><h2>🏗️ 成品生产入库</h2>
+                <p class="subtitle">工厂生产完毕后，将成品登记入库至工厂仓库</p>
                 <div class="form-row"><div class="form-group"><label>成品</label><select id="prodInProd">${db.products.map(p=>`<option value="${p.id}">${p.name}</option>`).join('')}</select></div>
-                <div class="form-group"><label>数量</label><input type="number" id="prodInQty" min="1"></div></div>
-                <div class="form-row"><div class="form-group"><label>关联生产工单</label><select id="prodInProdOrder"><option value="">不关联</option>${activePOs.map(o=>`<option value="${o.id}">${o.orderNo} - ${o.productName} (${o.status})</option>`).join('')}</select></div>
+                <div class="form-group"><label>数量</label><input type="number" id="prodInQty" min="1" placeholder="请输入数量"></div></div>
+                <div class="form-row"><div class="form-group"><label>关联生产工单（可选）</label><select id="prodInProdOrder"><option value="">不关联</option>${activePOs.map(o=>`<option value="${o.id}">${o.orderNo} - ${o.productName}（${stMap[o.status]||o.status}，已完成${o.completedQuantity||0}/${o.quantity}）</option>`).join('')}</select></div>
                 <div class="form-group"><label>操作人</label><input type="text" id="prodInOp" value="${currentDisplayName}"></div></div>
-                <button class="btn btn-success btn-block" onclick="submitProdIn()">✅ 确认成品入库</button></div>`;
+                <button class="btn btn-success btn-block" onclick="submitProdIn()">✅ 确认成品入库</button></div>
+                <div class="card"><h3>📝 近期入库记录</h3>
+                <div class="table-wrap">${recentRecords.length?`<table><tr><th>时间</th><th>成品</th><th>数量</th><th>关联工单</th><th>操作人</th></tr>${recentRecords.map(r=>{const po=db.productionOrders.find(p=>p.id===r.productionOrderId);return`<tr><td>${formatDate(r.createdAt)}</td><td>${r.productName}</td><td>${r.quantity}</td><td>${po?.orderNo||'-'}</td><td>${r.operatorName}</td></tr>`}).join('')}</table>`:'<div class="empty-state">暂无入库记录</div>'}</div></div>`;
             }
             window.submitProdIn = function() {
                 const db=getDBRef();
@@ -611,12 +642,15 @@
             // ==================== MRP 需求汇总 ====================
             function renderMRPPage(container) {
                 const db=getDBRef();
-                // 汇总所有非完成订单的物料需求
                 const pendingOrders = db.orders.filter(o=>o.status!=='completed');
-                const demandMap = {}; // materialId -> {name, unit, total, orders:[]}
+                const demandMap = {};
                 for(const order of pendingOrders) {
                     const boms = db.boms.filter(b=>b.productId===order.productId);
-                    const remain = order.orderQuantity - (order.shippedQuantity||0);
+                    // 净需求 = 订单数量 - 已发货 - 关联工单已生产数量
+                    const prodOrder = order.productionOrderId ? db.productionOrders.find(p=>p.id===order.productionOrderId) : null;
+                    const alreadyMade = prodOrder ? (prodOrder.completedQuantity||0) : 0;
+                    const remain = Math.max(0, order.orderQuantity - (order.shippedQuantity||0) - alreadyMade);
+                    if(remain===0) continue;
                     for(const bom of boms) {
                         if(!demandMap[bom.materialId]) {
                             const mat=db.materials.find(m=>m.id===bom.materialId);
@@ -627,25 +661,26 @@
                         demandMap[bom.materialId].orders.push(`${order.orderNo}×${needed}`);
                     }
                 }
-                // 计算各物料当前库存（全仓合计）
                 const inv = getInventory(db);
                 const rows = Object.entries(demandMap).map(([matId,d])=>{
                     let stock=0;
                     for(const [k,v] of Object.entries(inv)) { if(k.startsWith('material|'+matId+'|')) stock+=v; }
-                    const gap = d.total - stock;
+                    const gap = Math.ceil(d.total - stock);
                     return{matId,name:d.name,unit:d.unit,demand:d.total,stock,gap,orders:d.orders};
                 });
                 container.innerHTML = `
                 <div class="card"><h2>📊 MRP 物料需求汇总</h2>
-                <p class="subtitle">基于所有未完成销售订单的BOM展开，统计物料缺口</p>
+                <p class="subtitle">基于未完成订单 BOM 展开，扣除已生产和已有库存后计算净缺口</p>
                 ${pendingOrders.length===0?'<div class="empty-state">当前无未完成订单，无需求</div>':
-                `<div class="table-wrap"><table><tr><th>物料</th><th>需求量</th><th>当前库存</th><th>缺口</th><th>单位</th><th>操作</th></tr>
+                rows.length===0?'<div class="empty-state">✅ 当前库存足够覆盖所有需求，无缺口</div>':
+                `<div class="table-wrap"><table><tr><th>物料</th><th>净需求量</th><th>当前库存</th><th>缺口</th><th>单位</th><th>来源订单</th><th>操作</th></tr>
                 ${rows.map(r=>`<tr>
                   <td>${r.name}</td>
                   <td>${r.demand}</td>
                   <td>${r.stock}</td>
-                  <td><span class="tag ${r.gap>0?'tag-red':'tag-green'}">${r.gap>0?'+'+r.gap:r.gap}</span></td>
+                  <td><span class="tag ${r.gap>0?'tag-red':'tag-green'}">${r.gap>0?'+'+r.gap:'充足'}</span></td>
                   <td>${r.unit}</td>
+                  <td style="font-size:10px;color:var(--text2);">${r.orders.join(', ')}</td>
                   <td>${r.gap>0?`<button class="btn btn-sm btn-primary" onclick="createPOFromMRP('${r.matId}','${r.name}',${r.gap})">创建采购单</button>`:''}</td>
                 </tr>`).join('')}
                 </table></div>`}
@@ -821,6 +856,13 @@
                 ${db.users.map(u=>`<tr><td>${u.username}</td><td>${u.displayName||'-'}</td><td>${u.role==='yabang'?db.systemConfig.companyName:db.systemConfig.factoryName}</td><td>${formatDate(u.createdAt)}</td></tr>`).join('')}
                 </table></div></div>
 
+                <div class="card"><h3>💾 数据备份 / 恢复</h3>
+                <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">如果浏览器不支持本地存储（如Safari隐私模式），可手动导出JSON备份，下次打开时导入恢复。</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button class="btn btn-primary" onclick="exportData()">📤 导出数据 JSON</button>
+                  <label class="btn btn-outline" style="cursor:pointer;">📥 导入数据 JSON<input type="file" accept=".json" style="display:none" onchange="importData(this)"></label>
+                </div></div>
+
                 <div class="card"><h3>🗑️ 数据管理</h3>
                 <p style="font-size:12px;color:var(--text2);margin-bottom:10px;">清空所有业务数据（订单、库存、记录等），保留基础配置和用户</p>
                 <button class="btn btn-danger" onclick="clearAllData()">⚠️ 清空业务数据</button></div>`;
@@ -882,6 +924,30 @@
                 }, 100);
             };
 
+            window.exportData = function() {
+                const db=getDBRef();
+                const json=JSON.stringify(db,null,2);
+                const blob=new Blob([json],{type:'application/json'});
+                const a=document.createElement('a');
+                a.href=URL.createObjectURL(blob);
+                a.download='erp_backup_'+new Date().toISOString().slice(0,10)+'.json';
+                a.click(); URL.revokeObjectURL(a.href);
+                showToast('✅ 数据已导出');
+            };
+            window.importData = function(input) {
+                const file=input.files[0]; if(!file) return;
+                const reader=new FileReader();
+                reader.onload=function(e){
+                    try {
+                        const db=JSON.parse(e.target.result);
+                        if(!db.users||!db.orders||!db.materials){showToast('⚠️ 文件格式不正确'); return;}
+                        saveDB(db); showToast('✅ 数据已恢复'); switchPage('dashboard');
+                    }catch(err){showToast('⚠️ 解析失败：'+err.message);}
+                };
+                reader.readAsText(file);
+                input.value='';
+            };
+
             // 初始化
             initDB();
             checkAutoLogin();
@@ -897,7 +963,7 @@
             window.addBOM = addBOM; window.deleteBOM = deleteBOM;
             window.saveSettings = saveSettings; window.addMaterial = addMaterial; window.deleteMaterial = deleteMaterial;
             window.addProduct = addProduct; window.deleteProduct = deleteProduct; window.clearAllData = clearAllData;
-            window.closeModal = closeModal; window.shipOrder = shipOrder;
+            window.exportData = exportData; window.importData = importData; window.checkPOMismatch = checkPOMismatch;
         })();
     </script>
 </body>
